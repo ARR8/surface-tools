@@ -1,6 +1,6 @@
 # autorotate
 
-A simple script for automatic screen rotation, using a 3d acceleration sensor.
+A simple script for automatic screen rotation, using a 3d acceleration sensor. Requires root.
 This script does NOT remap your touchscreen to match the new rotation. Please run the penmon script from this repository to do this.
 
 Configuration:
@@ -12,5 +12,6 @@ Dependencies:
 * xrandr
 * pyudev
 * pygobject
+* keyboard
 * gtk+3
 * AppIndicator (optional)
