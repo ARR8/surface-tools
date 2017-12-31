@@ -30,6 +30,7 @@ import re
 import subprocess
 import os.path
 import signal
+import keyboard
 from gi.repository import Gtk, GdkPixbuf, GObject
 
 hasAppIndicator = True
@@ -97,6 +98,8 @@ assert device
 path = device.device_path
 
 prevorientation = ""
+
+keyboard.add_hotkey('win+o', toggleRotLock, args=["activate"])
 
 for resourcepath in resourcepaths[::-1]:
     if os.path.isfile(resourcepath + "rotate_lock.png"):
