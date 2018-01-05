@@ -5,10 +5,15 @@ sensorname="accel_3d"
 
 screenname="eDP1"
 
+rotLockKey="win+o"
+
+touchID="10"
+
 #####PROGRAM CODE#####
 #Do not change unless you know what you are doing!
 
 xrandr="/usr/bin/xrandr"
+xsetwacom="/usr/bin/xsetwacom"
 
 resourcepaths=[
 	"./",
@@ -55,12 +60,18 @@ def getOrientation(accelX, accelY, accelZ):
         orientation = "inverted" if accelY > 0 else "normal"
     else:
         orientation = "left" if accelX > 0 else "right"
-
     return orientation
 
 def rotate(orientation):
     if orientation in orientations:
         subprocess.call([xrandr, "--output", screenname, "--rotate", orientation])
+
+        orientationWacom = {"inverted" : "half",
+            "normal" : "none",
+            "left" : "ccw",
+            "right" : "cw",
+        }
+        subprocess.call([xsetwacom, "--set", touchID, "rotate", orientationWacom[orientation]])
 
 def toggleRotLock(event):
     global rotlock
@@ -99,7 +110,7 @@ path = device.device_path
 
 prevorientation = ""
 
-keyboard.add_hotkey('win+o', toggleRotLock, args=["activate"])
+keyboard.add_hotkey(rotLockKey, toggleRotLock, args=["activate"])
 
 for resourcepath in resourcepaths[::-1]:
     if os.path.isfile(resourcepath + "rotate_lock.png"):
