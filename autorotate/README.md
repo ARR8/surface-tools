@@ -1,6 +1,6 @@
 # autorotate
 
-A simple script for automatic screen rotation, using a 3d acceleration sensor. Requires root.
+A simple script for automatic screen rotation, using a 3d acceleration sensor.
 
 Configuration:
 * sensorname: Name of the acceleration sensor. Can usualy be found at `/sys/bus/iio/devices/<device>/name`.
@@ -13,6 +13,6 @@ Dependencies:
 * xrandr
 * pyudev
 * pygobject
-* keyboard
 * gtk+3
+* keyboard (optional, requires root)
 * AppIndicator (optional)

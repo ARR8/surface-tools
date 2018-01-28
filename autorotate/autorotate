@@ -80,12 +80,15 @@ def toggleRotLock(event):
     global unlockrot
 
     rotlock = not rotlock
+    statusIcon = lockrot if rotlock else unlockrot
+    statusLabel = "Unlock Rotation" if rotlock else "Lock Rotation"
+
     if hasAppIndicator:
         global toggle
-        icon.set_icon(lockrot if rotlock else unlockrot)
-        toggle.set_label("Unlock Rotation" if rotlock else "Lock Rotation")
+        icon.set_icon(statusIcon)
+        toggle.set_label(statusLabel)
     else:
-        icon.set_from_pixbuf(lockrot if rotlock else unlockrot)
+        icon.set_from_pixbuf(statusIcon)
 
 def checkRotation():
     if not rotlock:
@@ -110,7 +113,10 @@ path = device.device_path
 
 prevorientation = ""
 
-keyboard.add_hotkey(rotLockKey, toggleRotLock, args=["activate"])
+try:
+    keyboard.add_hotkey(rotLockKey, toggleRotLock, args=["activate"]) # Requires root
+except ImportError:
+    rotLockKey = None
 
 for resourcepath in resourcepaths[::-1]:
     if os.path.isfile(resourcepath + "rotate_lock.png"):
