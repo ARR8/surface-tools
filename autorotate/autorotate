@@ -13,7 +13,7 @@ touchID="10"
 #Do not change unless you know what you are doing!
 
 xrandr="/usr/bin/xrandr"
-xsetwacom="/usr/bin/xinput"
+xsetwacom="/usr/bin/xsetwacom"
 
 resourcepaths=[
 	"./",
@@ -66,12 +66,12 @@ def rotate(orientation):
     if orientation in orientations:
         subprocess.call([xrandr, "--output", screenname, "--rotate", orientation])
 
-        orientationWacom = {"inverted" : "-1 0 1 0 -1 1 0 0 1",
-            "normal" : "1 0 0 0 1 0 0 0 1",
-            "left" : "0 -1 1 1 0 0 0 0 1",
-            "right" : "0 1 0 -1 0 1 0 0 1",
+        orientationWacom = {"inverted" : "half",
+            "normal" : "none",
+            "left" : "ccw",
+            "right" : "cw",
         }
-        subprocess.call([xsetwacom, "set-prop", touchID, "--type=float", "'Coordinate Transformation Matrix'", orientationWacom[orientation]])
+        subprocess.call([xsetwacom, "--set", touchID, "rotate", orientationWacom[orientation]])
 
 def toggleRotLock(event):
     global rotlock
