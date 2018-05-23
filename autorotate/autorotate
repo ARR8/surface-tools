@@ -35,7 +35,6 @@ import re
 import subprocess
 import os.path
 import signal
-import keyboard
 from gi.repository import Gtk, GdkPixbuf, GObject
 
 hasAppIndicator = True
@@ -114,11 +113,14 @@ path = device.device_path
 prevorientation = ""
 
 try:
+    import keyboard
     keyboard.add_hotkey(rotLockKey, toggleRotLock, args=["activate"]) # Requires root
 except ImportError:
     rotLockKey = None
 
 for resourcepath in resourcepaths[::-1]:
+    if resourcepath == './':
+        resourcepath = os.path.join(os.path.dirname(__file__), '')
     if os.path.isfile(resourcepath + "rotate_lock.png"):
         if hasAppIndicator:
             lockrot = resourcepath + "rotate_lock.png"
@@ -137,7 +139,7 @@ if __name__ == "__main__":
 
     global icon
     if hasAppIndicator:
-        icon = AppIndicator.Indicator.new("autorotate", "unlockrot", AppIndicator.IndicatorCategory.APPLICATION_STATUS)
+        icon = AppIndicator.Indicator.new("autorotate", unlockrot, AppIndicator.IndicatorCategory.APPLICATION_STATUS)
         icon.set_status(AppIndicator.IndicatorStatus.ACTIVE)
         menu = Gtk.Menu()
         global toggle
