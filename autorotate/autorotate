@@ -118,20 +118,23 @@ try:
 except ImportError:
     rotLockKey = None
 
+iconPaths = dict()
 for resourcepath in resourcepaths[::-1]:
     if resourcepath == './':
         resourcepath = os.path.join(os.path.dirname(__file__), '')
     if os.path.isfile(resourcepath + "rotate_lock.png"):
+	iconPaths[True] = resourcepath + "rotate_lock.png"
         if hasAppIndicator:
-            lockrot = resourcepath + "rotate_lock.png"
+            lockrot = iconPaths[True]
         else:
-            lockrot = GdkPixbuf.Pixbuf.new_from_file(resourcepath + "rotate_lock.png")
+            lockrot = GdkPixbuf.Pixbuf.new_from_file(iconPaths[True])
 
     if os.path.isfile(resourcepath + "rotate.png"):
+	iconPaths[False] = resourcepath + "rotate.png"
         if hasAppIndicator:
-            unlockrot = resourcepath + "rotate.png"
+            unlockrot = iconPaths[False]
         else:
-            unlockrot = GdkPixbuf.Pixbuf.new_from_file(resourcepath + "rotate.png")
+            unlockrot = GdkPixbuf.Pixbuf.new_from_file(iconPaths[False])
 
 
 if __name__ == "__main__":
