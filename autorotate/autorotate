@@ -16,10 +16,10 @@ xrandr="/usr/bin/xrandr"
 xsetwacom="/usr/bin/xsetwacom"
 
 resourcepaths=[
-	"./",
-	"/usr/share/autorotate/",
-	"/usr/local/share/autorotate/"
-	]
+        "./",
+        "/usr/share/autorotate/",
+        "/usr/local/share/autorotate/"
+        ]
 
 orientations=[
         "normal",
@@ -123,14 +123,14 @@ for resourcepath in resourcepaths[::-1]:
     if resourcepath == './':
         resourcepath = os.path.join(os.path.dirname(__file__), '')
     if os.path.isfile(resourcepath + "rotate_lock.png"):
-	iconPaths[True] = resourcepath + "rotate_lock.png"
+        iconPaths[True] = resourcepath + "rotate_lock.png"
         if hasAppIndicator:
             lockrot = iconPaths[True]
         else:
             lockrot = GdkPixbuf.Pixbuf.new_from_file(iconPaths[True])
 
     if os.path.isfile(resourcepath + "rotate.png"):
-	iconPaths[False] = resourcepath + "rotate.png"
+        iconPaths[False] = resourcepath + "rotate.png"
         if hasAppIndicator:
             unlockrot = iconPaths[False]
         else:
