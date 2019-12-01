@@ -1,165 +1,123 @@
-#!/usr/bin/python
+#!/bin/env python3
+import subprocess
+import os
+import signal
+import atexit
+import pyudev
+import gi
+gi.require_version('Gtk', '3.0')
+from gi.repository import Gtk, GLib
 
 #####CONFIGURATION#####
-sensorname="accel_3d"
-
-screenname="eDP1"
-
-rotLockKey="win+o"
-
-touchID="10"
+SENSORNAME = "accel_3d"
+SCREENNAME = "eDP-1"
+TOUCHDEVID = "Atmel Atmel maXTouch Digitizer touch"
+NOTIFY_ON_LOCK = True
+if NOTIFY_ON_LOCK:
+    gi.require_version('Notify', '0.7')
+    from gi.repository import Notify
 
 #####PROGRAM CODE#####
 #Do not change unless you know what you are doing!
+XRANDR = "/usr/bin/xrandr"
+XSETWACOM = "/usr/bin/xsetwacom"
 
-xrandr="/usr/bin/xrandr"
-xsetwacom="/usr/bin/xsetwacom"
+ROTLOCK = False
+PREV_ORIENTATION = ""
 
-resourcepaths=[
-        "./",
-        "/usr/share/autorotate/",
-        "/usr/local/share/autorotate/"
-        ]
+def get_orientation(accel_x, accel_y, accel_z):
+    abs_accel_x = abs(accel_x)
+    abs_accel_y = abs(accel_y)
+    abs_accel_z = abs(accel_z)
 
-orientations=[
-        "normal",
-        "inverted",
-        "left",
-        "right"
-        ]
-
-rotlock=False
-
-import pyudev
-import re
-import subprocess
-import os.path
-import signal
-from gi.repository import Gtk, GdkPixbuf, GObject
-
-hasAppIndicator = True
-try:
-    from gi.repository import AppIndicator3 as AppIndicator
-except:
-    hasAppIndicator = False
-
-def twos_comp(val):
-    if val & (1 << (16-1)) != 0:
-        val = val - (1 << 16)
-    return val
-
-def getOrientation(accelX, accelY, accelZ):
-    absAccelX = abs(accelX)
-    absAccelY = abs(accelY)
-    absAccelZ = abs(accelZ)
-
-    if absAccelZ > 4 * absAccelX and absAccelZ > 4 * absAccelY:
+    if abs_accel_z > 4 * abs_accel_x and abs_accel_z > 4 * abs_accel_y:
         orientation = "flat"
-    elif 3 * absAccelY > 2 * absAccelX:
-        orientation = "inverted" if accelY > 0 else "normal"
+    elif 3 * abs_accel_y > 2 * abs_accel_x:
+        if accel_y > 0:
+            orientation = "inverted"
+        else:
+            orientation = "normal"
     else:
-        orientation = "left" if accelX > 0 else "right"
+        if accel_x > 0:
+            orientation = "left"
+        else:
+            orientation = "right"
     return orientation
 
 def rotate(orientation):
-    if orientation in orientations:
-        subprocess.call([xrandr, "--output", screenname, "--rotate", orientation])
+    if orientation in ["normal", "inverted", "left", "right"]:
+        subprocess.call([XRANDR, "--output", SCREENNAME, "--rotate",
+                         orientation])
 
-        orientationWacom = {"inverted" : "half",
-            "normal" : "none",
-            "left" : "ccw",
-            "right" : "cw",
-        }
-        subprocess.call([xsetwacom, "--set", touchID, "rotate", orientationWacom[orientation]])
+        orientation_wacom = {"inverted": "half",
+                             "normal": "none",
+                             "left": "ccw",
+                             "right": "cw"}
+        subprocess.call([XSETWACOM, "--set", TOUCHDEVID, "rotate",
+                         orientation_wacom[orientation]])
 
-def toggleRotLock(event):
-    global rotlock
-    global icon
-    global lockrot
-    global unlockrot
+def toggle_rotlock(*args):
+    global ROTLOCK
+    ROTLOCK = not ROTLOCK
+    status_icon = "rotation-locked-symbolic" if ROTLOCK else "rotation-allowed-symbolic"
+    status_label = "Rotation locked" if ROTLOCK else "Rotation allowed"
 
-    rotlock = not rotlock
-    statusIcon = lockrot if rotlock else unlockrot
-    statusLabel = "Unlock Rotation" if rotlock else "Lock Rotation"
+    try:
+        n = Notify.Notification.new("Autorotation", status_label, status_icon)
+        n.show()
+    except NameError:
+        pass
+    ICON.set_from_icon_name(status_icon)
 
-    if hasAppIndicator:
-        global toggle
-        icon.set_icon(statusIcon)
-        toggle.set_label(statusLabel)
-    else:
-        icon.set_from_pixbuf(statusIcon)
+def check_rotation():
+    if not ROTLOCK:
+        device = pyudev.Devices.from_path(context, path)
+        accel_x = device.attributes.asint("in_accel_x_raw")
+        accel_y = device.attributes.asint("in_accel_y_raw")
+        accel_z = device.attributes.asint("in_accel_z_raw")
 
-def checkRotation():
-    if not rotlock:
-        device = pyudev.Device.from_path(context, path)
-        accelX = twos_comp(device.attributes.asint("in_accel_x_raw"))
-        accelY = twos_comp(device.attributes.asint("in_accel_y_raw"))
-        accelZ = twos_comp(device.attributes.asint("in_accel_z_raw"))
 
-        orientation = getOrientation(accelX, accelY, accelZ)
+        orientation = get_orientation(accel_x, accel_y, accel_z)
 
-        global prevorientation
-        if orientation != prevorientation:
-            prevorientation = orientation
+        global PREV_ORIENTATION
+        if orientation != PREV_ORIENTATION:
+            PREV_ORIENTATION = orientation
             rotate(orientation)
-    GObject.timeout_add(1000, checkRotation)
-
-context = pyudev.Context()
-for device in context.list_devices(subsystem="iio").match_attribute("name", sensorname): break
-assert device
-
-path = device.device_path
-
-prevorientation = ""
-
-try:
-    import keyboard
-    keyboard.add_hotkey(rotLockKey, toggleRotLock, args=["activate"]) # Requires root
-except ImportError:
-    rotLockKey = None
-
-iconPaths = dict()
-for resourcepath in resourcepaths[::-1]:
-    if resourcepath == './':
-        resourcepath = os.path.join(os.path.dirname(__file__), '')
-    if os.path.isfile(resourcepath + "rotate_lock.png"):
-        iconPaths[True] = resourcepath + "rotate_lock.png"
-        if hasAppIndicator:
-            lockrot = iconPaths[True]
-        else:
-            lockrot = GdkPixbuf.Pixbuf.new_from_file(iconPaths[True])
-
-    if os.path.isfile(resourcepath + "rotate.png"):
-        iconPaths[False] = resourcepath + "rotate.png"
-        if hasAppIndicator:
-            unlockrot = iconPaths[False]
-        else:
-            unlockrot = GdkPixbuf.Pixbuf.new_from_file(iconPaths[False])
-
+    GLib.timeout_add(1000, check_rotation)
 
 if __name__ == "__main__":
-    GObject.threads_init()
+    # Init udev
+    context = pyudev.Context()
+    for device in context.list_devices(subsystem="iio").match_attribute("name", SENSORNAME): break
+    assert device
+    path = device.device_path
 
-    global icon
-    if hasAppIndicator:
-        icon = AppIndicator.Indicator.new("autorotate", unlockrot, AppIndicator.IndicatorCategory.APPLICATION_STATUS)
-        icon.set_status(AppIndicator.IndicatorStatus.ACTIVE)
-        menu = Gtk.Menu()
-        global toggle
-        toggle = Gtk.MenuItem("Lock Rotation")
+    # Init GTK
+    try:
+        Notify.init("autorotate")
+    except NameError:
+        pass
+    ICON = Gtk.StatusIcon.new_from_icon_name("rotation-allowed-symbolic")
+    ICON.connect("activate", toggle_rotlock)
 
-        menu.append(toggle)
-        icon.set_menu(menu)
-        toggle.show()
+    # Init PID
+    try:
+        RUNDIR = os.environ['XDG_RUNTIME_DIR']
+    except KeyError:
+        RUNDIR = '/tmp'
+    FILENAME = RUNDIR + '/autorotate'
+    F = open(FILENAME, 'x')
+    F.write(str(os.getpid()))
+    F.flush()
 
-        toggle.connect("activate", toggleRotLock)
-    else:
-        icon = Gtk.StatusIcon.new_from_pixbuf(unlockrot)
-        icon.connect("activate", toggleRotLock)
+    # Init system
+    signal.signal(signal.SIGUSR1, toggle_rotlock)
+    atexit.register(F.close)
+    atexit.register(os.remove, FILENAME)
+    try:
+        atexit.register(Notify.uninit)
+    except NameError:
+        pass
 
-    # Ctrl-c now kills the scipt
-    # https://bugzilla.gnome.org/show_bug.cgi?id=622084#c12
-    signal.signal(signal.SIGINT, signal.SIG_DFL)
-
-    GObject.idle_add(checkRotation)
+    GLib.idle_add(check_rotation)
     Gtk.main()
