@@ -3,6 +3,7 @@ import subprocess
 import os
 import signal
 import atexit
+import sys
 import pyudev
 import gi
 gi.require_version('Gtk', '3.0')
@@ -24,6 +25,8 @@ XSETWACOM = "/usr/bin/xsetwacom"
 
 ROTLOCK = False
 PREV_ORIENTATION = ""
+
+PIDFILE = ""
 
 def get_orientation(accel_x, accel_y, accel_z):
     abs_accel_x = abs(accel_x)
@@ -85,6 +88,16 @@ def check_rotation():
             rotate(orientation)
     GLib.timeout_add(1000, check_rotation)
 
+def cleanup(*args):
+    os.remove(PIDFILE)
+    try:
+        Notify.uninit()
+    except NameError:
+        pass
+    if args: # If called by signal, not by unexit
+        atexit.unregister(cleanup)
+        sys.exit()
+
 if __name__ == "__main__":
     # Init udev
     context = pyudev.Context()
@@ -105,19 +118,16 @@ if __name__ == "__main__":
         RUNDIR = os.environ['XDG_RUNTIME_DIR']
     except KeyError:
         RUNDIR = '/tmp'
-    FILENAME = RUNDIR + '/autorotate'
-    F = open(FILENAME, 'x')
+    PIDFILE = RUNDIR + '/autorotate'
+    F = open(PIDFILE, 'x')
     F.write(str(os.getpid()))
-    F.flush()
+    F.close()
 
     # Init system
     signal.signal(signal.SIGUSR1, toggle_rotlock)
-    atexit.register(F.close)
-    atexit.register(os.remove, FILENAME)
-    try:
-        atexit.register(Notify.uninit)
-    except NameError:
-        pass
+
+    atexit.register(cleanup)
+    signal.signal(signal.SIGTERM, cleanup)
 
     GLib.idle_add(check_rotation)
     Gtk.main()
