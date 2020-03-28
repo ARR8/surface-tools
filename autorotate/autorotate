@@ -4,13 +4,12 @@ import os
 import signal
 import atexit
 import sys
-import pyudev
+from pydbus import SystemBus
 import gi
 gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk, GLib
+from gi.repository import Gtk
 
 #####CONFIGURATION#####
-SENSORNAME = "accel_3d"
 SCREENNAME = "eDP-1"
 TOUCHDEVID = "Atmel Atmel maXTouch Digitizer touch"
 NOTIFY_ON_LOCK = True
@@ -23,47 +22,34 @@ if NOTIFY_ON_LOCK:
 XRANDR = "/usr/bin/xrandr"
 XSETWACOM = "/usr/bin/xsetwacom"
 
-ROTLOCK = False
-PREV_ORIENTATION = ""
-
 PIDFILE = ""
 
-def get_orientation(accel_x, accel_y, accel_z):
-    abs_accel_x = abs(accel_x)
-    abs_accel_y = abs(accel_y)
-    abs_accel_z = abs(accel_z)
-
-    if abs_accel_z > 4 * abs_accel_x and abs_accel_z > 4 * abs_accel_y:
-        orientation = "flat"
-    elif 3 * abs_accel_y > 2 * abs_accel_x:
-        if accel_y > 0:
-            orientation = "inverted"
-        else:
-            orientation = "normal"
-    else:
-        if accel_x > 0:
-            orientation = "left"
-        else:
-            orientation = "right"
-    return orientation
-
-def rotate(orientation):
-    if orientation in ["normal", "inverted", "left", "right"]:
+def rotate(interface, changed_props, invalid_props):
+    orientation = changed_props["AccelerometerOrientation"]
+    if orientation in ["normal", "bottom-up", "left-up", "right-up"]:
+        orientation_views = {"bottom-up": "inverted",
+                             "normal": "normal",
+                             "left-up": "left",
+                             "right-up": "right"}
         subprocess.call([XRANDR, "--output", SCREENNAME, "--rotate",
-                         orientation])
+                         orientation_views[orientation]])
 
-        orientation_wacom = {"inverted": "half",
+        orientation_wacom = {"bottom-up": "half",
                              "normal": "none",
-                             "left": "ccw",
-                             "right": "cw"}
+                             "left-up": "ccw",
+                             "right-up": "cw"}
         subprocess.call([XSETWACOM, "--set", TOUCHDEVID, "rotate",
                          orientation_wacom[orientation]])
 
-def toggle_rotlock(*args):
-    global ROTLOCK
-    ROTLOCK = not ROTLOCK
-    status_icon = "rotation-locked-symbolic" if ROTLOCK else "rotation-allowed-symbolic"
-    status_label = "Rotation locked" if ROTLOCK else "Rotation allowed"
+def toggle_rotlock(_, sensors):
+    if sensors.onPropertiesChanged:
+        sensors.onPropertiesChanged = None
+        status_icon = "rotation-locked-symbolic"
+        status_label = "Rotation locked"
+    else:
+        sensors.onPropertiesChanged = rotate
+        status_icon = "rotation-allowed-symbolic"
+        status_label = "Rotation allowed"
 
     try:
         n = Notify.Notification.new("Autorotation", status_label, status_icon)
@@ -71,22 +57,6 @@ def toggle_rotlock(*args):
     except NameError:
         pass
     ICON.set_from_icon_name(status_icon)
-
-def check_rotation():
-    if not ROTLOCK:
-        device = pyudev.Devices.from_path(context, path)
-        accel_x = device.attributes.asint("in_accel_x_raw")
-        accel_y = device.attributes.asint("in_accel_y_raw")
-        accel_z = device.attributes.asint("in_accel_z_raw")
-
-
-        orientation = get_orientation(accel_x, accel_y, accel_z)
-
-        global PREV_ORIENTATION
-        if orientation != PREV_ORIENTATION:
-            PREV_ORIENTATION = orientation
-            rotate(orientation)
-    GLib.timeout_add(1000, check_rotation)
 
 def cleanup(*args):
     os.remove(PIDFILE)
@@ -99,11 +69,10 @@ def cleanup(*args):
         sys.exit()
 
 if __name__ == "__main__":
-    # Init udev
-    context = pyudev.Context()
-    for device in context.list_devices(subsystem="iio").match_attribute("name", SENSORNAME): break
-    assert device
-    path = device.device_path
+    # Init dbus
+    SENSORS = SystemBus().get("net.hadess.SensorProxy")
+    SENSORS.ClaimAccelerometer()
+    SENSORS.onPropertiesChanged = rotate
 
     # Init GTK
     try:
@@ -111,7 +80,7 @@ if __name__ == "__main__":
     except NameError:
         pass
     ICON = Gtk.StatusIcon.new_from_icon_name("rotation-allowed-symbolic")
-    ICON.connect("activate", toggle_rotlock)
+    ICON.connect("activate", toggle_rotlock, SENSORS)
 
     # Init PID
     try:
@@ -124,10 +93,9 @@ if __name__ == "__main__":
     F.close()
 
     # Init system
-    signal.signal(signal.SIGUSR1, toggle_rotlock)
+    signal.signal(signal.SIGUSR1, lambda *args: toggle_rotlock(None, SENSORS))
 
     atexit.register(cleanup)
     signal.signal(signal.SIGTERM, cleanup)
 
-    GLib.idle_add(check_rotation)
     Gtk.main()
